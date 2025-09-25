@@ -1,0 +1,5 @@
+.CV/
+__pycache__/
+*.pyc
+*.pt
+media_local/
