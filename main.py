@@ -9,6 +9,7 @@ parser.add_argument('--source', default='0')
 args = parser.parse_args()
 
 model = YOLO('yolov8n.pt')
+tracker = sv.ByteTrack()
 cap = cv2.VideoCapture(int(args.source) if args.source.isdigit() else args.source)
 box_annotator = sv.BoxAnnotator()
 label_annotator = sv.LabelAnnotator()
@@ -20,10 +21,11 @@ while True:
     
     results = model(frame)[0]
     detections = sv.Detections.from_ultralytics(results)
+    detections = tracker.update_with_detections(detections)
     
     labels = [
-        f"{model.model.names[class_id]} {conf:.2f}"
-        for class_id, conf in zip(detections.class_id, detections.confidence)
+        f"{model.model.names[class_id]} {conf:.2f} {tracker_id}"
+        for class_id, conf, tracker_id in zip(detections.class_id, detections.confidence, detections.tracker_id)
     ]
     
     frame = box_annotator.annotate(frame, detections)
