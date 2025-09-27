@@ -11,6 +11,14 @@ args = parser.parse_args()
 model = YOLO('yolov8n.pt')
 tracker = sv.ByteTrack()
 cap = cv2.VideoCapture(int(args.source) if args.source.isdigit() else args.source)
+
+frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
+
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+out = cv2.VideoWriter('output.mp4', fourcc, fps, (frame_width, frame_height))
+
 box_annotator = sv.BoxAnnotator()
 label_annotator = sv.LabelAnnotator()
 
@@ -35,7 +43,9 @@ while True:
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
     
     cv2.imshow('YOLOv8n. Press ESC to exit.', frame)
+    out.write(frame)
     if cv2.waitKey(1) == 27: break
 
 cap.release()
+out.release()
 cv2.destroyAllWindows()
