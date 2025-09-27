@@ -4,47 +4,72 @@ import supervision as sv
 import argparse
 import time
 
+class Switch:
+    current_id = None
+    ids = []
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--source', default='0')
 args = parser.parse_args()
 
 model = YOLO('yolov8n.pt')
-tracker = sv.ByteTrack()
 cap = cv2.VideoCapture(int(args.source) if args.source.isdigit() else args.source)
 
-frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
+out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 
+                     int(cap.get(5)) or 30, 
+                     (int(cap.get(3)), int(cap.get(4))))
 
-fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-out = cv2.VideoWriter('output.mp4', fourcc, fps, (frame_width, frame_height))
-
-box_annotator = sv.BoxAnnotator()
+normal_annotator = sv.BoxAnnotator(color=sv.Color.BLUE)
+selected_annotator = sv.BoxAnnotator(color=sv.Color.RED)
 label_annotator = sv.LabelAnnotator()
+
+switch = Switch()
+tracker = sv.ByteTrack()
 
 while True:
     start = time.time()
     ret, frame = cap.read()
     if not ret: break
     
-    results = model(frame)[0]
-    detections = sv.Detections.from_ultralytics(results)
+    detections = sv.Detections.from_ultralytics(model(frame)[0])
     detections = tracker.update_with_detections(detections)
     
-    labels = [
-        f"{model.model.names[class_id]} {conf:.2f} {tracker_id}"
-        for class_id, conf, tracker_id in zip(detections.class_id, detections.confidence, detections.tracker_id)
-    ]
+    switch.ids = sorted(set(detections.tracker_id)) if detections else []
+    if not switch.current_id or switch.current_id not in switch.ids:
+        switch.current_id = switch.ids[0] if switch.ids else None
     
-    frame = box_annotator.annotate(frame, detections)
-    frame = label_annotator.annotate(frame, detections, labels=labels)
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord('a') and switch.ids:
+        idx = switch.ids.index(switch.current_id)
+        switch.current_id = switch.ids[(idx - 1) % len(switch.ids)]
+    elif key == ord('d') and switch.ids:
+        idx = switch.ids.index(switch.current_id)
+        switch.current_id = switch.ids[(idx + 1) % len(switch.ids)]
+    elif key == 27: break
+    
+    if switch.current_id and detections:
+        mask = detections.tracker_id == switch.current_id
+        selected_detections, normal_detections = detections[mask], detections[~mask]
+    else:
+        selected_detections, normal_detections = sv.Detections.empty(), detections
+    
+    for dets, annotator in [(normal_detections, normal_annotator), 
+                           (selected_detections, selected_annotator)]:
+        if dets:
+            labels = [f"{model.model.names[cls]} {conf:.2f} {tid}" 
+                     for cls, conf, tid in zip(dets.class_id, dets.confidence, dets.tracker_id)]
+            frame = annotator.annotate(frame, dets)
+            frame = label_annotator.annotate(frame, dets, labels=labels)
+    
+    if switch.current_id:
+        cv2.putText(frame, f'Selected ID: {switch.current_id}', (10, 70), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
     
     cv2.putText(frame, f'Time: {time.time()-start:.3f}s', (10, 30), 
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
     
-    cv2.imshow('YOLOv8n. Press ESC to exit.', frame)
+    cv2.imshow('YOLOv8n. Use A/D to switch IDs. ESC to exit.', frame)
     out.write(frame)
-    if cv2.waitKey(1) == 27: break
 
 cap.release()
 out.release()
