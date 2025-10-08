@@ -1,31 +1,26 @@
 import cv2
 import argparse
+import os
 from tracking import Tracker
 from controls import Controls
 
 def setup_camera(source):
     cap = cv2.VideoCapture(int(source) if source.isdigit() else source)
-    out = cv2.VideoWriter('output.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 
+    output_dir = '../media_local'
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, 'output.mp4')
+    out = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'), 
                          int(cap.get(5)) or 30, (int(cap.get(3)), int(cap.get(4))))
     return cap, out
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--source', default='0')
-    parser.add_argument('--csrt', action='store_true', help='Use CSRT tracker')
-    parser.add_argument('--nano', action='store_true', help='Use NanoTrack tracker') 
-    parser.add_argument('--vit', action='store_true', help='Use ViT tracker')
+    parser.add_argument('--tracker', type=str, choices=['csrt', 'nano', 'vit'], 
+                       default='csrt', help='Choose tracker type')
     args = parser.parse_args()
     
-    # Определяем тип трекера
-    if args.csrt: 
-        tracker_type = 'csrt'
-    elif args.nano: 
-        tracker_type = 'nano'  
-    elif args.vit: 
-        tracker_type = 'vit'
-    else: 
-        tracker_type = 'csrt'  # по умолчанию
+    tracker_type = args.tracker
     
     tracker = Tracker(tracker_type=tracker_type)
     controls = Controls(tracker)

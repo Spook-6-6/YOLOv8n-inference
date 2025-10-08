@@ -1,5 +1,6 @@
 import cv2
 from overlay import draw_text
+from tracking import Tracker
 
 class Controls:
     def __init__(self, tracker):
